@@ -10,8 +10,9 @@ class PDFHandler():
         # 根据文件中或数据库中的id来标识下载的文件
         self.dbID = 0
         self.filePath = '' 
-        self.basePath = os.path.dirname(os.path.abspath(__file__))
-        self.pdfPath = os.path.join(self.basePath, 'pdfdir')
+        #self.basePath = os.path.dirname(os.path.abspath(__file__))
+        #self.pdfPath = os.path.join(self.basePath, 'pdfdir')
+        self.pdfPath = 'pdfdir'
         if not os.path.exists(self.pdfPath):os.mkdir(self.pdfPath)
 
     def Inet_download_PDF(self, pdfUrl, dbID):
