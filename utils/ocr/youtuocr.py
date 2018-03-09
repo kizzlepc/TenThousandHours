@@ -53,7 +53,7 @@ class YouTuOcr():
             base64_string = base64.b64encode(f.read()).decode('utf8') 
         return base64_string
 
-    def save_result_to_txt(self, result):
+    def save_result_to_txt(self, result, outfile):
         """
         a.将识别的结果保存到指定的文件中
         """
@@ -78,7 +78,7 @@ class YouTuOcr():
         items =res_json.get('items')
         item_list = [i.get('itemstring') for i in items]
         result = ''.join(item_list)
-        self.save_result_to_txt(result)
+        self.save_result_to_txt(result, outfile)
         
     def dir_all_ocr(self, dir, outfile):
         """
