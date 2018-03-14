@@ -22,10 +22,10 @@ class AsyMethodPostSpider(object):
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',}
             response = yield httpclient.AsyncHTTPClient().fetch(url, method='POST', headers=headers, body=req_body)
             print('POST请求完成： %s' % url)
-            self.handle_data(response)
         except Exception as e:
-            print('POST请求错误: %s %s' % (e, url))
+            print('POST请求错误: %s , 请求参数：%s' % (e, req_body))
             raise gen.Return('')
+        raise gen.Return(response)
 
     @gen.coroutine
     def _run(self):
@@ -39,12 +39,15 @@ class AsyMethodPostSpider(object):
 
                 print('post参数： %s' % req_body)
                 self._fetching.add(req_body)
-                yield self.method_post(self.url, req_body)
-                self._fetched.add(req_body)
+                response = yield self.method_post(self.url, req_body)
 
-                for i in range(self.concurrency):
-                    if self.params:
-                        yield self._q.put(self.params.pop())
+                if response:
+                    yield self.handle_data(response)
+                    self._fetched.add(req_body)
+                else:
+                    self._fetching.remove(req_body)
+                    yield self._q.put(req_body)
+
 
             finally:
                 self._q.task_done()
@@ -54,24 +57,25 @@ class AsyMethodPostSpider(object):
             while True:
                 yield fetch_url()
 
-        self._q.put(self.params.pop())
+        for param in self.params:
+            yield self._q.put(param)
 
         for _ in range(self.concurrency):
             worker()
         yield self._q.join(timeout=timedelta(seconds=300))   
         assert self._fetching == self._fetched
-        print('完成共用： %d 秒, 完成请求的url个数: %s.' % (time.time() - start, len(self._fetched)))
+        print('POST完成共用： %d 秒, 完成请求POST次数: %s.' % (time.time() - start, len(self._fetched)))
 
-    def run(self):
+    def post(self):
         io_loop = ioloop.IOLoop.current()
         io_loop.run_sync(self._run)
 
 
 def main():
     url ='http://httpbin.org/post' 
-    params = ["a=1",'b','c','d','e','f','g']
+    params = ["a=1",'b=2','c','d','e','f','g']
     s = AsyMethodPostSpider(url, params, 10)
-    s.run()
+    s.post()
 
 if __name__ == '__main__':
     main()

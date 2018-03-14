@@ -18,11 +18,12 @@ class AsyMethodGetSpider(object):
     @gen.coroutine
     def method_get(self, url):
         try:
-            yield httpclient.AsyncHTTPClient().fetch(url, self.handle_data)
+            response = yield httpclient.AsyncHTTPClient().fetch(url)
             print('GET请求完成： %s' % url)
         except Exception as e:
             print('GET请求错误: %s %s' % (e, url))
             raise gen.Return('')
+        raise gen.Return(response)
 
     @gen.coroutine
     def _run(self):
@@ -36,12 +37,14 @@ class AsyMethodGetSpider(object):
 
                 print('GET正在请求： %s' % current_url)
                 self._fetching.add(current_url)
-                yield self.method_get(current_url)
-                self._fetched.add(current_url)
-
-                for i in range(self.concurrency):
-                    if self.urls:
-                        yield self._q.put(self.urls.pop())
+                response = yield self.method_get(current_url)
+                
+                if response:
+                    yield self.handle_data(response)
+                    self._fetched.add(current_url)
+                else:
+                    self._fetching.remove(current_url)
+                    yield self._q.put(current_url)
 
             finally:
                 self._q.task_done()
@@ -50,8 +53,10 @@ class AsyMethodGetSpider(object):
         def worker():
             while True:
                 yield fetch_url()
+  
 
-        self._q.put(self.urls.pop())
+        for url in self.urls:
+            yield self._q.put(url)
 
         for _ in range(self.concurrency):
             worker()
@@ -59,22 +64,23 @@ class AsyMethodGetSpider(object):
         assert self._fetching == self._fetched
         print('GET完成共用： %d 秒, 完成请求的url个数: %s.' % (time.time() - start, len(self._fetched)))
 
-    def run(self):
+    def get(self):
         io_loop = ioloop.IOLoop.current()
         io_loop.run_sync(self._run)
 
 
 def main():
     urls = [
-        'http://www.baidu.com',
         'http://www.qq.com',
+        'http://www.baidu.com',
         'http://www.taobao.com',
-        'https://www.python.org/',
-        'https://www.yahoo.com/',
-        'https://github.com/',
-        ] 
+        'http://www.sohu.com/',
+        'http://www.sina.com.cn/',
+        'http://www.163.com/', 
+        'http://www.ifeng.com/', 
+        ]
     s = AsyMethodGetSpider(urls, 10)
-    s.run()
+    s.get()
 
 if __name__ == '__main__':
     main()
