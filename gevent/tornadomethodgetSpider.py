@@ -5,11 +5,12 @@ import codecs
 import random
 import re
 import hashlib
+import json
 
 
 class AsyMethodGetSpider(object):
     def __init__(self, urls, concurrency):
-        self.parseJS = 'http://192.168.100.81:8050'
+        self.parseJS = 'http://192.168.99.100:8050'
         self.wait = 10
 
         self.urls = ['%s/render.html?url=%s&wait=%s'%(self.parseJS, url, self.wait) for url in urls]
@@ -19,7 +20,7 @@ class AsyMethodGetSpider(object):
         self._fetched = set()
     
     def proxy(self):
-        return "http://192.168."+random.choice(['10', '11', '13', '14'])+"."+str(random.randrange(100,200))+":80"  
+        return "http://192.168."+random.choice(['10', '11',])+"."+str(random.randrange(100,200))+":80"  
     
     @gen.coroutine
     def handle_data(self, response):
@@ -38,6 +39,7 @@ class AsyMethodGetSpider(object):
         try:
             response = yield httpclient.AsyncHTTPClient().fetch('%s&proxy=%s'%(url, self.proxy()))
             print('GET请求完成： %s' % url)
+            #print(response.body)
         except Exception as e:
             print('GET请求错误: %s %s' % (e, url))
             raise gen.Return('')
@@ -127,7 +129,10 @@ def main():
                      'nx.gsxt.gov.cn': 640000, 'xj.gsxt.gov.cn': 650000}
 
     urls = [base_url.format(*n) for n in province_home.items()]
-    #urls = ['http://bj.gsxt.gov.cn/corp-query-entprise-info-hot-search-list.html?province=110000',]
+    #urls = ['http://gz.gsxt.gov.cn/corp-query-entprise-info-hot-search-list.html?province=520000',]
+    #urls = ['http://gz.gsxt.gov.cn/%7B0DB2A2846AD4530986A008B639A7EF0127125DD26C59C7E3F34D950B30D45B68E73F19C05E7A6AD41EF2F2DA033B00172F2F2E39011D48DA79D679D679DA48EB44EB44EB44EB44EB446837949DC2615CB8F06B9F27A8367E14BC52DD6D41-1521429486590%7D',]
+    #urls = ['http://gz.gsxt.gov.cn/%7B0DB2A2846AD4530986A008B639A7EF0127125DD26C59C7E3F34D950B30D45B68E73F19C05E7A6AD41EF2F2DA033B00172F2F2E39011D48DA79D679D679DA48EB44EB44EB44EB44EB446837949DC2615CB8F06B9F27A8367E14BC52DD6D41-1521429486590%7D',]
+    #urls = ['http://gz.gsxt.gov.cn',]
     s = AsyMethodGetSpider(urls, 100)
     s.get()
 
@@ -136,3 +141,4 @@ if __name__ == '__main__':
     
     
 #GET完成共用： 965 秒, 完成请求的url个数: 301.
+#GET完成共用： 3231 秒, 完成请求的url个数: 301.
