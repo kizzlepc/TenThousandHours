@@ -10,6 +10,27 @@ from sqlalchemy.orm import sessionmaker
 import mysqloperation
 from datetime import datetime
 from contextlib import closing
+import logging  
+from logging.handlers import TimedRotatingFileHandler 
+
+
+def create_logger():
+    logFilePath = "D:\\log\\access_log"  
+    logger = logging.getLogger("YouLoggerName")  
+    logger.setLevel(logging.INFO)  
+    
+    handler = TimedRotatingFileHandler(logFilePath,  
+                                       when="d",  
+                                       interval=1,  
+                                       backupCount=7)  
+    
+    
+    formatter = logging.Formatter('%(message)s')  
+      
+    handler.setFormatter(formatter)  
+      
+    logger.addHandler(handler)  
+    return logger
 
 
 class AsyMethodGetSpider(object):
@@ -22,6 +43,7 @@ class AsyMethodGetSpider(object):
         self._q = queues.Queue()
         self._fetching = set()
         self._fetched = set()
+        self.logger = create_logger()
     
     def proxy(self):
         return "http://192.168."+random.choice(['10', '11',])+"."+str(random.randrange(100,200))+":80"  
@@ -38,51 +60,41 @@ class AsyMethodGetSpider(object):
         html_source = response.body.decode('utf8')
         html = re.sub(r'\s*', '', html_source)
         html = re.sub(r'负责人：', '法定代表人：', html)
+        html = re.sub(r'投资人：', '法定代表人：', html)
+        html = re.sub(r'执行事务合伙人:', '法定代表人：', html)
         html = re.sub(r'营业场所：', '住所：', html)
+        html = re.sub(r'主要经营场所：', '住所：', html)
         html = re.sub(r'业务范围：', '经营范围：', html)
         html = re.sub(r'成员出资总额：', '注册资本：', html)
+        html = re.sub(r'合伙期限自：', '营业期限自：', html)
+        html = re.sub(r'合伙期限至：', '营业期限至：', html)
+        html = re.sub(r'合&nbsp;&nbsp;&nbsp;伙&nbsp;&nbsp;&nbsp;期&nbsp;&nbsp;&nbsp;限', '营&nbsp;&nbsp;&nbsp;业&nbsp;&nbsp;&nbsp;期&nbsp;&nbsp;&nbsp;限', html)
         html = re.search(r'<divclass=\"bgPop\">(.+?)业务咨询与技术支持联系方式', html, re.S).group(1)
         province_short = response.request.url.split('http://')[2].split('.')[0]
         
-        social_code = parse_re(r'<dtclass=.+?>统一社会信用代码：</dt>(.+?)</dd>', html)
-        social_code = re.sub(r'<.+?>', '', social_code)
-        enterprise_name = parse_re(r'<dtclass=.+?>企业名称：</dt>(.+?)</dd>', html)
-        enterprise_name = re.sub(r'<.+?>', '', enterprise_name)
-        company_type = parse_re(r'<dtclass=.+?>类型：</dt>(.+?)</dd>', html)
-        company_type = re.sub(r'<.+?>', '', company_type)
-        legal_person = parse_re(r'<dtclass=.+?">法定代表人：</dt>(.+?)</dd>', html)
-        legal_person = re.sub(r'<.+?>', '', legal_person)
-        reg_capital = parse_re(r'<dtclass=.+?>注册资本：</dt>(.+?)</dd>', html) 
-        reg_capital = re.sub(r'<.+?>', '', reg_capital)
-        build_date = parse_re(r'<dtclass=.+?>成立日期：</dt>(.+?)</dd>', html)
-        build_date = re.sub(r'<.+?>', '', build_date)
+        social_code = self.parse_re(r'<dtclass=.+?>统一社会信用代码：</dt>(.+?)</dd>', html)
+        enterprise_name = self.parse_re(r'<dtclass=.+?>企业名称：</dt>(.+?)</dd>', html)
+        company_type = self.parse_re(r'<dtclass=.+?>类型：</dt>(.+?)</dd>', html)
+        legal_person = self.parse_re(r'<dtclass=.+?">法定代表人：</dt>(.+?)</dd>', html)
+        reg_capital = self.parse_re(r'<dtclass=.+?>注册资本：</dt>(.+?)</dd>', html) 
+        build_date = self.parse_re(r'<dtclass=.+?>成立日期：</dt>(.+?)</dd>', html)
         build_date = re.sub(r'年|月|日', '-', build_date).strip('-')
-        period_from = parse_re(r'<dtclass=.+?>营业期限自：</dt>(.+?)</dd>', html)
-        period_from = re.sub(r'<.+?>', '', period_from)
-        #period_from = re.sub(r'年|月|日', '-', period_from).strip('-')
-        period_to = parse_re(r'<dtclass=.+?>营业期限至：</dt>(.+?)</dd>', html)
-        period_to = re.sub(r'<.+?>', '', period_to)
-        #period_to = re.sub(r'年|月|日', '-', period_to).strip('-')
+        period_from = self.parse_re(r'<dtclass=.+?>营业期限自：</dt>(.+?)</dd>', html)
+        period_to = self.parse_re(r'<dtclass=.+?>营业期限至：</dt>(.+?)</dd>', html)
         
-        period2 = parse_re(r'<tdclass=.+?>营&nbsp;&nbsp;&nbsp;业&nbsp;&nbsp;&nbsp;期&nbsp;&nbsp;&nbsp;限</td>(.+?)</td>', html)
-        period2 = re.sub(r'<.+?>', '', period2)
+        period2 = self.parse_re(r'<tdclass=.+?>营&nbsp;&nbsp;&nbsp;业&nbsp;&nbsp;&nbsp;期&nbsp;&nbsp;&nbsp;限</td>(.+?)</td>', html)
+        period_from2 = ''
+        period_to2 = ''
         if period2:
             period_from2 = period2.split('至')[0]
-            #period_from2 = re.sub(r'年|月|日', '-', period_from2).strip('-')
             period_to2 = period2.split('至')[1]
-            #period_to2 = re.sub(r'年|月|日', '-', period_to2).strip('-')
         
-        reg_authority = parse_re(r'<dtclass=.+?>登记机关：</dt>(.+?)</dd>', html)
-        reg_authority = re.sub(r'<.+?>', '', reg_authority)
-        approved_date = parse_re(r'<dtclass=.+?>核准日期：</dt>(.+?)</dd>', html)
-        approved_date = re.sub(r'<.+?>', '', approved_date)
+        reg_authority = self.parse_re(r'<dtclass=.+?>登记机关：</dt>(.+?)</dd>', html)
+        approved_date = self.parse_re(r'<dtclass=.+?>核准日期：</dt>(.+?)</dd>', html)
         approved_date = re.sub(r'年|月|日', '-', approved_date).strip('-')
-        reg_status = parse_re(r'<dtclass=.+?>登记状态：</dt>(.+?)</dd>', html)
-        reg_status = re.sub(r'<.+?>', '', reg_status)
-        address = parse_re(r'<dtclass=.+?>住所：</dt>(.+?)</dd>', html)
-        address = re.sub(r'<.+?>', '', address)
-        range = parse_re(r'<dtclass=.+?>经营范围：</dt>(.+?)</dd>', html)
-        range = re.sub(r'<.+?>', '', range)
+        reg_status = self.parse_re(r'<dtclass=.+?>登记状态：</dt>(.+?)</dd>', html)
+        address = self.parse_re(r'<dtclass=.+?>住所：</dt>(.+?)</dd>', html)
+        range = self.parse_re(r'<dtclass=.+?>经营范围：</dt>(.+?)</dd>', html)
         province = province_short+md5_url
         create_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S') # 采集时间
 
@@ -126,26 +138,26 @@ class AsyMethodGetSpider(object):
                 hot.create_time = create_time
                 hot.update_date = create_time
 
-                query_objs = session.query(mysqloperation.HotTable).filter(mysqloperation.HotTable.enterprise_name.like('%'+enterprise_name+'%')).all()
+                query_objs = session.query(mysqloperation.HotTable).filter(mysqloperation.HotTable.enterprise_name==enterprise_name).first()
 
                 if query_objs:
                     shijian = query_objs.create_time
                     delta = (datetime.now()-datetime.strptime(str(shijian), '%Y-%m-%d %H:%M:%S')).days
-                    if delta < 2:
-                        print('ok')
-                        (lambda f,d:(f.write(d+'\n'), f.close()))(codecs.open('record.txt', 'w'), enterprise_name)
+                    if delta < 360:
+                        #print('ok')
+                        #(lambda f,d:(f.write(d+'\n'), f.close()))(codecs.open('record.txt', 'a'), enterprise_name)
+                        self.logger.info('已存在----------：'+enterprise_name)
                     else:                               
-                        print('管道处理:更新记录############')
+                        self.logger.info('更新记录##########：'+enterprise_name)
                 else:
                     session.add(hot)
                     session.commit()  
-                    print('管道处理:新记录插入')
+                    self.logger.info('新记录插入:$$$$$$$$$$:'+enterprise_name)
                 
         except Exception as e:
-            print(str(e))
-            print('save err')
-            (lambda f,d:(f.write(d+'\n'), f.close()))(codecs.open('record.txt', 'w'), enterprise_name)
-            (lambda f,d:(f.write(d+'\n'), f.close()))(codecs.open('record.txt', 'w'), str(e))
+            (lambda f,d:(f.write(d+'\n'), f.close()))(codecs.open('record.txt', 'a'), enterprise_name)
+            #(lambda f,d:(f.write(d+'\n'), f.close()))(codecs.open('record.txt', 'a'), str(e))
+            self.logger.info('入库异常!!!!!!!!!!：%s %s %s'%(enterprise_name, province))
             pass
    
     @gen.coroutine
@@ -157,7 +169,7 @@ class AsyMethodGetSpider(object):
         else:
             md5_url = self.md5_str(response.request.url)
             (lambda f,d:(f.write(d), f.close()))(codecs.open('D:\\gongshang\\newperpage\\'+response.request.url.split('http://')[2].split('.')[0]+md5_url+'.per','w', encoding='utf8'), response.body.decode('utf8'))
-        print('打印GET结果：url:%s, bytes:%s'%(response.request.url, len(response.body)))
+        self.logger.info('打印GET结果==========：url:%s, bytes:%s'%(response.request.url, len(response.body)))
         yield self.save_mysql(response, md5_url)
         
         
@@ -165,10 +177,10 @@ class AsyMethodGetSpider(object):
     def method_get(self, url):
         try:
             response = yield httpclient.AsyncHTTPClient().fetch('%s&proxy=%s'%(url, self.proxy()))
-            print('GET请求完成： %s' % url)
+            #self.logger.info('GET请求完成： %s' % url)
             #print(response.body)
         except Exception as e:
-            print('GET请求错误: %s %s' % (e, url))
+            #self.logger.info('GET请求错误: %s %s' % (e, url))
             raise gen.Return('')
         raise gen.Return(response)
     
@@ -195,7 +207,7 @@ class AsyMethodGetSpider(object):
             try:
                 if current_url in self._fetching:
                     return
-                print('GET正在请求： %s' % current_url)
+                #self.logger.info('GET正在请求： %s' % current_url)
                 self._fetching.add(current_url)
                 response = yield self.method_get(current_url)
 
@@ -234,7 +246,7 @@ class AsyMethodGetSpider(object):
             worker()
         yield self._q.join()   
         assert self._fetching == self._fetched
-        print('GET完成共用： %d 秒, 完成请求的url个数: %s.' % (time.time() - start, len(self._fetched)))
+        self.logger.info('GET完成共用： %d 秒, 完成请求的url个数: %s.' % (time.time() - start, len(self._fetched)))
 
     def get(self):
         io_loop = ioloop.IOLoop.current()
@@ -256,19 +268,9 @@ def main():
                      'nx.gsxt.gov.cn': 640000, 'xj.gsxt.gov.cn': 650000}
 
     urls = [base_url.format(*n) for n in province_home.items()]
-    #urls = ['http://gz.gsxt.gov.cn/corp-query-entprise-info-hot-search-list.html?province=520000',]
-    #urls = ['http://gz.gsxt.gov.cn/%7B0DB2A2846AD4530986A008B639A7EF0127125DD26C59C7E3F34D950B30D45B68E73F19C05E7A6AD41EF2F2DA033B00172F2F2E39011D48DA79D679D679DA48EB44EB44EB44EB44EB446837949DC2615CB8F06B9F27A8367E14BC52DD6D41-1521429486590%7D',]
-    #urls = ['http://gz.gsxt.gov.cn/%7B0DB2A2846AD4530986A008B639A7EF0127125DD26C59C7E3F34D950B30D45B68E73F19C05E7A6AD41EF2F2DA033B00172F2F2E39011D48DA79D679D679DA48EB44EB44EB44EB44EB446837949DC2615CB8F06B9F27A8367E14BC52DD6D41-1521429486590%7D',]
-    #urls = ['http://gz.gsxt.gov.cn',]
     s = AsyMethodGetSpider(urls, 100)
     s.get()
     
-def parse_re(strs, source):
-    try:
-        return re.search(strs, source, re.S).group(1)
-    except Exception as e:
-        print(e)
-        return ''
 if __name__ == '__main__':
     main()   
     
